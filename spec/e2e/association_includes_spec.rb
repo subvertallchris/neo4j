@@ -7,20 +7,32 @@ describe 'association inclusion' do
   class AISBand
     include Neo4j::ActiveNode
     property :name
-    has_many :out, :members, model_class: 'AISMember'
+    has_many :out, :members, model_class: 'AISMember', rel_class: 'AISHasMember'
   end
 
   class AISMember
     include Neo4j::ActiveNode
     property :name
-    has_many :in, :bands, model_class: 'AISBand', origin: :members
-    has_many :out, :instruments, model_class: 'AISInstrument'
+    has_many :in, :bands, model_class: 'AISBand', rel_class: 'AISHasMember'
+    has_many :out, :instruments, model_class: 'AISInstrument', rel_class: 'AISPlays'
   end
 
   class AISInstrument
     include Neo4j::ActiveNode
     property :name
-    has_many :in, :members, model_class: 'AISMember', origin: :instruments
+    has_many :in, :members, model_class: 'AISMember', rel_class: 'AISPlays'
+  end
+
+  class AISHasMember
+    include Neo4j::ActiveRel
+    from_class AISBand
+    to_class AISMember
+  end
+
+  class AISPlays
+    include Neo4j::ActiveRel
+    from_class AISMember
+    to_class AISInstrument
   end
 
   let!(:tool)     { AISBand.create(name: 'Tool') }
@@ -114,14 +126,19 @@ describe 'association inclusion' do
     end
   end
 
-  # describe 'each_with_rel' do
-  #   it 'preloads rels' do
-  #     result = tool.members.where(name: 'Maynard').includes(:instruments).each_with_rel do |member, rel|
-  #       expect(member).to be_a(AISMember)
-  #       expect(rel).to be_a(Neo4j::Server::CypherRelationship)
-  #     end
-  #     # require 'pry'; binding.pry
-  #     # result
-  #   end
-  # end
+  describe 'each_with_rel' do
+    it 'preloads rels' do
+      result = tool.members.where(name: 'Maynard').includes(:instruments).each_with_rel do |member, rel|
+        expect(member).to be_a(AISMember)
+        expect(rel).to be_a(AISHasMember)
+        member.instruments.each_with_rel do |instrument, instrument_rel|
+          expect(instrument).to be_a(AISInstrument)
+          expect(instrument_rel).to be_a(AISPlays)
+        end
+        puts 'THIS DOES NOT WORK. LOOK AT THE ASSOCIATION CACHE HERE'
+      end
+      # require 'pry'; binding.pry
+      # result
+    end
+  end
 end

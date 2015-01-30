@@ -54,6 +54,7 @@ module Neo4j
         # @param [String] the cypher used in the query
         # @return [String] A basic hash of the query
         def cypher_hash(cypher_string)
+          puts "cypher_string #{cypher_string}"
           cypher_string.hash.abs
         end
       end
