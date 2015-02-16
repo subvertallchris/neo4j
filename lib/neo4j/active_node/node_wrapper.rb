@@ -50,7 +50,7 @@ class Neo4j::Node
     def sorted_wrapper_class
       wrappers = _class_wrappers
       return self if wrappers.nil?
-      wrappers.map { |w| Neo4j::ActiveNode::Labels._wrapped_labels[w] }.sort.first
+      wrappers.map! { |w| Neo4j::ActiveNode::Labels._wrapped_labels[w] }.sort!.first
     end
   end
 end
