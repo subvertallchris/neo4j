@@ -82,19 +82,35 @@ module Neo4j::ActiveRel
       props.merge!(args[0]) if args[0].is_a?(Hash)
       set_classname(props, true)
 
-      if from_node.id.nil? || to_node.id.nil?
-        fail RelCreateFailedError, "Unable to create relationship (id is nil). from_node: #{from_node}, to_node: #{to_node}"
-      end
+      # if from_node.id.nil? || to_node.id.nil?
+      #   fail RelCreateFailedError, "Unable to create relationship (id is nil). from_node: #{from_node}, to_node: #{to_node}"
+      # end
       _rel_creation_query(from_node, to_node, props)
     end
 
     N1_N2_STRING = 'n1, n2'
     ACTIVEREL_NODE_MATCH_STRING = 'ID(n1) = {n1_neo_id} AND ID(n2) = {n2_neo_id}'
     def _rel_creation_query(from_node, to_node, props)
-      Neo4j::Session.query.match(N1_N2_STRING)
-        .where(ACTIVEREL_NODE_MATCH_STRING).params(n1_neo_id: from_node.neo_id, n2_neo_id: to_node.neo_id).break
-        .send(create_method, "n1-[r:`#{type}`]->n2")
-        .with('r').set(r: props).pluck(:r).first
+      from_as_query = from_node.to_query(:n1)
+      to_as_query = to_node.to_query(:n2)
+      match = from_node.persisted? || to_node.persisted?
+      match_args = if match
+        from_match = "(n1)" if from_node.persisted?
+        to_match = "(n2)" if to_node.persisted?
+        from_match && to_match ? "#{from_match}, #{to_match}" : "#{from_match || to_match}"
+      end
+
+      big_dumb_props = from_as_query.params.merge(to_as_query.params)
+      query_start = Neo4j::Session.current.query
+      matched_query = match ? query_start.match(match_args) : query_start
+      create_query = matched_query.create("#{from_as_query.to_s}-[r:`#{type}`]->#{to_as_query.to_s}")
+      create_with_props = create_query.with(:r).set(r: props).params(big_dumb_props)
+      create_with_props.pluck(:r).first
+
+      # Neo4j::Session.query.match(N1_N2_STRING)
+      #   .where(ACTIVEREL_NODE_MATCH_STRING).params(n1_neo_id: from_node.neo_id, n2_neo_id: to_node.neo_id).break
+      #   .send(create_method, "n1-[r:`#{type}`]->n2")
+      #   .with('r').set(r: props).pluck(:r).first
     end
 
     def create_method

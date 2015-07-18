@@ -32,6 +32,10 @@ module Neo4j
         self.class.query_proxy(node: node_var, source_object: self).match_to(self)
       end
 
+      def to_query(var)
+        Neo4j::ActiveNode::Query::QueryBuilder.new(self, var)
+      end
+
       module ClassMethods
         # Returns a Query object with all nodes for the model matched as the specified variable name
         #
