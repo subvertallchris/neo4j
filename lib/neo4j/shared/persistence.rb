@@ -147,9 +147,6 @@ module Neo4j::Shared
       self.class.model_name.cache_key
     end
 
-    def create_magic_properties
-    end
-
     def update_magic_properties
       self.updated_at = DateTime.now if respond_to?(:updated_at=) && changed? && !updated_at_changed?
     end

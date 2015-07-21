@@ -21,15 +21,17 @@ module Neo4j::ActiveRel
       fail RelInvalidError, self unless save(*args)
     end
 
-    def create_model(*)
+    def create_model
       validate_node_classes!
-      create_magic_properties
-      set_timestamps
-      properties = self.class.declared_property_manager.convert_properties_to(self, :db, props)
-      rel = _create_rel(from_node, to_node, properties)
+      rel = _create_rel(from_node, to_node, creation_props)
       return self unless rel.respond_to?(:_persisted_obj)
       init_on_load(rel._persisted_obj, from_node, to_node, @rel_type)
       true
+    end
+
+    def creation_props
+      set_timestamps
+      self.class.declared_property_manager.convert_properties_to(self, :db, props)
     end
 
     module ClassMethods
@@ -95,15 +97,19 @@ module Neo4j::ActiveRel
       to_as_query = to_node.to_query(:n2)
       match = from_node.persisted? || to_node.persisted?
       match_args = if match
-        from_match = "(n1)" if from_node.persisted?
-        to_match = "(n2)" if to_node.persisted?
-        from_match && to_match ? "#{from_match}, #{to_match}" : "#{from_match || to_match}"
-      end
+                     from_match = '(n1)' if from_node.persisted?
+                     to_match = '(n2)' if to_node.persisted?
+                     from_match && to_match ? "#{from_match}, #{to_match}" : "#{from_match || to_match}"
+                   end
 
       big_dumb_props = from_as_query.params.merge(to_as_query.params)
+      # require 'pry'; binding.pry
+      where_array = [from_as_query, to_as_query].map(&:where).compact
+      where_string = where_array.count > 1 ? where_array.join(' AND ') : where_array.first
       query_start = Neo4j::Session.current.query
       matched_query = match ? query_start.match(match_args) : query_start
-      create_query = matched_query.create("#{from_as_query.to_s}-[r:`#{type}`]->#{to_as_query.to_s}")
+      create_query = matched_query.send(create_method, "#{from_as_query}-[r:`#{type}`]->#{to_as_query}")
+      create_query = create_query.where(where_string) unless where_string.strip.empty?
       create_with_props = create_query.with(:r).set(r: props).params(big_dumb_props)
       create_with_props.pluck(:r).first
 

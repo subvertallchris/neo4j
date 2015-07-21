@@ -1,7 +1,6 @@
 module Neo4j::ActiveNode
   module Query
     class QueryBuilder
-
       attr_reader :node, :var, :persisted
 
       def initialize(node, var)
@@ -23,21 +22,24 @@ module Neo4j::ActiveNode
       end
 
       def match_props
-        "{props_#{object_id}}" unless persisted?
+        "{props_#{var}}" unless persisted?
+      end
+
+      def where
+        "ID(#{var}) = {#{var}_id}" if persisted?
       end
 
       def params
         if persisted?
-          { "props_#{object_id}" => { neo_id: node.neo_id }}
+          {"#{var}_id": node.neo_id}
         else
-          { "props_#{object_id}" => node.props }
+          {"props_#{var}": node.creation_props}
         end
       end
 
       def labels
-        ":#{node.class.mapped_label_names.join(':')}"
+        ":#{node.class.mapped_label_names.join(':')}" unless node.persisted?
       end
-
     end
   end
 end
