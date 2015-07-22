@@ -87,31 +87,14 @@ module Neo4j::ActiveRel
       # if from_node.id.nil? || to_node.id.nil?
       #   fail RelCreateFailedError, "Unable to create relationship (id is nil). from_node: #{from_node}, to_node: #{to_node}"
       # end
-      _rel_creation_query(from_node, to_node, props)
+      # _rel_creation_query(from_node, to_node, props)
+      Query.create(self, props)
     end
 
     N1_N2_STRING = 'n1, n2'
     ACTIVEREL_NODE_MATCH_STRING = 'ID(n1) = {n1_neo_id} AND ID(n2) = {n2_neo_id}'
     def _rel_creation_query(from_node, to_node, props)
-      from_as_query = from_node.to_query(:n1)
-      to_as_query = to_node.to_query(:n2)
-      match = from_node.persisted? || to_node.persisted?
-      match_args = if match
-                     from_match = '(n1)' if from_node.persisted?
-                     to_match = '(n2)' if to_node.persisted?
-                     from_match && to_match ? "#{from_match}, #{to_match}" : "#{from_match || to_match}"
-                   end
 
-      big_dumb_props = from_as_query.params.merge(to_as_query.params)
-      # require 'pry'; binding.pry
-      where_array = [from_as_query, to_as_query].map(&:where).compact
-      where_string = where_array.count > 1 ? where_array.join(' AND ') : where_array.first
-      query_start = Neo4j::Session.current.query
-      matched_query = match ? query_start.match(match_args) : query_start
-      create_query = matched_query.send(create_method, "#{from_as_query}-[r:`#{type}`]->#{to_as_query}")
-      create_query = create_query.where(where_string) unless where_string.strip.empty?
-      create_with_props = create_query.with(:r).set(r: props).params(big_dumb_props)
-      create_with_props.pluck(:r).first
 
       # Neo4j::Session.query.match(N1_N2_STRING)
       #   .where(ACTIVEREL_NODE_MATCH_STRING).params(n1_neo_id: from_node.neo_id, n2_neo_id: to_node.neo_id).break
@@ -119,8 +102,84 @@ module Neo4j::ActiveRel
       #   .with('r').set(r: props).pluck(:r).first
     end
 
-    def create_method
-      self.class.unique? ? :create_unique : :create
+    class Query
+      attr_reader :from_node, :to_node, :props, :rel
+
+      def initialize(rel, props)
+        @rel = rel
+        @from_node = rel.from_node
+        @to_node = rel.to_node
+        @props = props
+      end
+
+      def self.create(rel, props)
+        new_rel = self.new(rel, props)
+
+        new_rel.creation_query
+      end
+
+      def creation_query
+        create_query = matched_query.send(create_method, create_string)
+        create_query = create_query.where(where_string) unless skip_where_filter?
+        create_with_props = create_query.with(:r).set(r: props).params(big_dumb_props(from_as_query, to_as_query))
+        create_with_props.pluck(:r).first
+      end
+
+      def skip_where_filter?
+        where_string.nil? || where.strip.empty?
+      end
+
+      def create_method
+        rel.class.unique? ? :create_unique : :create
+      end
+
+      def create_string
+        "#{from_as_query}-[r:`#{rel.type}`]->#{to_as_query}"
+      end
+
+      def big_dumb_props(from_as_query, to_as_query)
+        from_as_query.params.merge(to_as_query.params)
+      end
+
+      def match?
+        from_node.persisted? || to_node.persisted?
+      end
+
+      def query_start
+        Neo4j::Session.current.query
+      end
+
+      def from_as_query
+        @from_as_query ||= from_node.to_query(:n1)
+      end
+
+      def to_as_query
+        @to_as_query ||= to_node.to_query(:n2)
+      end
+
+      def matched_query
+        return query_start unless match?
+        query_start.match(match_args)
+      end
+
+      def match_args
+        from_match = '(n1)' if from_node.persisted?
+        to_match = '(n2)' if to_node.persisted?
+        from_match && to_match ? "#{from_match}, #{to_match}" : "#{from_match || to_match}"
+      end
+
+      def where_array
+        @where_array ||= [from_as_query, to_as_query].map(&:where).compact
+      end
+
+      def where_string
+        @where_string ||= where_array.count > 1 ? where_array.join(' AND ') : where_array.first
+      end
     end
   end
 end
+
+
+
+
+
