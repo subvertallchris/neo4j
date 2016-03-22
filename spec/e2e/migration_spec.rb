@@ -13,16 +13,16 @@ describe 'migration tasks' do
       class User
         include Neo4j::ActiveNode
         property :name
-        has_many :out, :songs, model_class: Song, type: 'songs'
+        has_many :out, :songs, model_class: :Song, type: 'songs'
       end
 
       class Song
         include Neo4j::ActiveNode
         property :name
 
-        has_many :in, :owners, model_class: User, origin: :songs
-        has_many :out, :singers, model_class: User, rel_class: MigrationSpecs::SecondRelClass
-        has_many :out, :new_singers, model_class: User, rel_class: MigrationSpecs::ThirdRelClass
+        has_many :in, :owners, model_class: :User, origin: :songs
+        has_many :out, :singers, model_class: :User, rel_class: 'MigrationSpecs::SecondRelClass'
+        has_many :out, :new_singers, model_class: :User, rel_class: 'MigrationSpecs::ThirdRelClass'
         def custom_id
           'my new id'
         end
@@ -67,8 +67,8 @@ describe 'migration tasks' do
     let(:map_template) { {models: ['MigrationSpecs::User', 'MigrationSpecs::Song']} }
 
     before do
-      Rails.stub_chain(:root, :join).and_return('/hd/gems/rails/add_id_property.yml')
-      YAML.stub(:load_file).and_return(map_template)
+      allow(Rails).to receive_message_chain(:root, :join).and_return('/hd/gems/rails/add_id_property.yml')
+      allow(YAML).to receive(:load_file).and_return(map_template)
     end
 
     it 'loads an initialization file' do
